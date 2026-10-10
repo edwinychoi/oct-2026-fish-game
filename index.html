@@ -64,7 +64,7 @@
     position: absolute;
     left: 0;
     right: 0;
-    top: 0;
+    top: 48px; /* below the "tap to feed" hint */
     height: 0; /* set from script: ends a safe distance above the highest wave */
     display: flex;
     flex-direction: column;
@@ -77,6 +77,16 @@
     font: 500 13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 40%);
     mask-image: linear-gradient(to bottom, transparent 0, #000 40%);
+  }
+  /* Permanent hint, top left, lined up with the log's left margin. */
+  .hint {
+    position: absolute;
+    top: clamp(14px, 2.5vh, 28px);
+    left: clamp(16px, 4vw, 48px);
+    z-index: 1; /* above the log's fade */
+    pointer-events: none;
+    font: 500 13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #94a3b8;
   }
   .log-line {
     flex-shrink: 0; /* never squeeze lines; extra ones scroll out of the top instead */
@@ -104,6 +114,7 @@
   <div class="stage" id="stage">
     <canvas class="water" id="water"></canvas>
     <div class="log" id="log" aria-live="polite"></div>
+    <div class="hint">tap to feed</div>
   </div>
 <script>
   // Everyone in the tank. Each fish's frames are small pre-cut sprites in fish/
@@ -152,7 +163,7 @@
     stage.style.setProperty("--fish-scale", fit.toFixed(3));
     resizeWater();
     // The log stays in the white space: it ends above the highest a wave can rise.
-    logEl.style.height = `${Math.max(0, stage.clientHeight * WATERLINE - maxWave() - 12)}px`;
+    logEl.style.height = `${Math.max(0, stage.clientHeight * WATERLINE - maxWave() - 12 - logEl.offsetTop)}px`;
   }
 
   // ---------------------------------------------------------------------------
