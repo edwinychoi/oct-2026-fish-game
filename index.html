@@ -58,6 +58,38 @@
     pointer-events: none;
     will-change: transform, opacity;
   }
+  /* Feeding log: small plain text in the white space above the water. New lines
+     appear at the bottom, older ones move up and fade out through the top. */
+  .log {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 0; /* set from script: ends a safe distance above the highest wave */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-start;
+    padding: 0 clamp(16px, 4vw, 48px); /* keep clear of the window's left edge */
+    box-sizing: border-box;
+    overflow: hidden;
+    pointer-events: none;
+    font: 500 13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 40%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 40%);
+  }
+  .log-line {
+    flex-shrink: 0; /* never squeeze lines; extra ones scroll out of the top instead */
+    white-space: nowrap;
+    overflow: hidden;
+    animation: log-in 0.25s ease-out both;
+    transition: opacity 0.8s ease;
+  }
+  .log-line.is-fading { opacity: 0; }
+  @keyframes log-in {
+    from { opacity: 0; max-height: 0; }
+    to { opacity: 1; max-height: 1.5em; }
+  }
   .fish {
     position: absolute;
     left: 0;
@@ -71,6 +103,7 @@
 <body>
   <div class="stage" id="stage">
     <canvas class="water" id="water"></canvas>
+    <div class="log" id="log" aria-live="polite"></div>
   </div>
 <script>
   // Everyone in the tank. Each fish's frames are small pre-cut sprites in fish/
@@ -117,6 +150,46 @@
     const fit = heads ? Math.min(1, Math.sqrt((water / 2) / heads)) : 1;
     stage.style.setProperty("--fish-scale", fit.toFixed(3));
     resizeWater();
+    // The log stays in the white space: it ends above the highest a wave can rise.
+    logEl.style.height = `${Math.max(0, stage.clientHeight * WATERLINE - maxWave() - 12)}px`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Feeding log: "Fish fed on <date>" when a round of feeding starts, then a line
+  // per bite with that fish's running count, each in their own color.
+  // ---------------------------------------------------------------------------
+
+  const logEl = document.getElementById("log");
+  const LOG_COLORS = {
+    diego: "#c2410c", charles: "#2f7d32", grace: "#be185d",
+    iris: "#6d28d9", keith: "#1d4ed8", liam: "#a16207",
+    stella: "#0f766e", edwin: "#4d7c0f", emily: "#a21caf",
+  };
+  const FED_COLOR = "#64748b";
+  const LOG_SHOW_MS = 3500;   // how long a line stays before fading
+  const NEW_ROUND_MS = 4000;  // a bite after this much quiet starts a new feeding round
+  const bitesBy = {};
+  let lastBiteAt = -Infinity;
+
+  function logLine(text, color) {
+    const line = document.createElement("div");
+    line.className = "log-line";
+    line.textContent = text;
+    line.style.color = color;
+    logEl.appendChild(line);
+    setTimeout(() => line.classList.add("is-fading"), LOG_SHOW_MS);
+    setTimeout(() => line.remove(), LOG_SHOW_MS + 900);
+  }
+
+  function recordBite(fish, now) {
+    if (now - lastBiteAt > NEW_ROUND_MS) {
+      const date = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+      logLine(`Fish fed on ${date}`, FED_COLOR);
+    }
+    lastBiteAt = now;
+    const name = fish.look.name;
+    bitesBy[name] = (bitesBy[name] || 0) + 1;
+    logLine(`${name[0].toUpperCase()}${name.slice(1)} ate ${bitesBy[name]} food`, LOG_COLORS[name] || FED_COLOR);
   }
 
   // ---------------------------------------------------------------------------
@@ -492,7 +565,8 @@
   function updateFace(fish, now) {
     if (now < fish.chompUntil) {
       const seq = fish.look.chomp;
-      showFrame(fish, seq[Math.floor((now - fish.chompStart) / CHOMP_FRAME_MS) % seq.length]);
+      const step = Math.floor(Math.max(0, now - fish.chompStart) / CHOMP_FRAME_MS);
+      showFrame(fish, seq[step % seq.length]);
     } else {
       showFrame(fish, 0);
     }
@@ -682,6 +756,7 @@
         f.eaten = true;
         f.eatAge = 0;
         chomp(fish, now, 450);   // keep chewing for a moment after each bite
+        recordBite(fish, now);
       } else if (dist < fw * 1.2) {
         chomp(fish, now, 120);   // start chomping as food gets close
       }
