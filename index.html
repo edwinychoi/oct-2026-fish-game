@@ -88,6 +88,72 @@
     font: 500 13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
     color: #94a3b8;
   }
+  /* Tap demo: a faint hand taps the middle of the white space and a few pale flakes
+     sprinkle down. It fades away after the first real tap. */
+  .tap-demo {
+    position: absolute;
+    left: 50%;
+    top: calc(100% * 1548 / 4804 * 0.42); /* the tap point */
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    transition: opacity 0.6s ease;
+  }
+  .tap-demo.is-done { opacity: 0; }
+  .tap-hand {
+    position: absolute;
+    left: -9px;
+    top: -1px;
+    width: 34px;
+    transform-origin: 9px 1px;
+    animation: tap-press 2.8s ease-in-out infinite;
+  }
+  .tap-ring {
+    position: absolute;
+    left: -14px;
+    top: -14px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #cbd5e1;
+    opacity: 0;
+    animation: tap-ring 2.8s ease-out infinite;
+  }
+  .tap-flake {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 6px;
+    height: 4px;
+    border-radius: 1px;
+    background: #f6b26b;
+    opacity: 0;
+    animation: tap-flake 2.8s ease-in infinite;
+  }
+  .tap-flake:nth-child(3) { --dx: -24px; --spin: -70deg; animation-delay: 0.05s; }
+  .tap-flake:nth-child(4) { --dx: -11px; --spin: 50deg; }
+  .tap-flake:nth-child(5) { --dx: -34px; --spin: 110deg; animation-delay: 0.12s; }
+  @keyframes tap-press {
+    0%, 12% { transform: translate(6px, 10px) rotate(-18deg); }
+    24% { transform: translate(0, 0) rotate(-18deg) scale(0.92); }
+    32% { transform: translate(0, 0) rotate(-18deg); }
+    55%, 100% { transform: translate(6px, 10px) rotate(-18deg); }
+  }
+  @keyframes tap-ring {
+    0%, 22% { opacity: 0; transform: scale(0.2); }
+    26% { opacity: 0.45; }
+    55%, 100% { opacity: 0; transform: scale(1.4); }
+  }
+  @keyframes tap-flake {
+    0%, 26% { opacity: 0; transform: translate(0, 0) rotate(0); }
+    32% { opacity: 0.45; }
+    72% { opacity: 0.3; }
+    86%, 100% { opacity: 0; transform: translate(var(--dx), 54px) rotate(var(--spin)); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tap-hand, .tap-ring, .tap-flake { animation: none; }
+    .tap-ring, .tap-flake { display: none; }
+  }
   .log-line {
     flex-shrink: 0; /* never squeeze lines; extra ones scroll out of the top instead */
     white-space: nowrap;
@@ -115,6 +181,20 @@
     <canvas class="water" id="water"></canvas>
     <div class="log" id="log" aria-live="polite"></div>
     <div class="hint">tap to feed</div>
+    <div class="tap-demo" id="tap-demo" aria-hidden="true">
+      <!-- A flat pointing hand; the tip of the index finger is the tap point. -->
+      <svg class="tap-hand" viewBox="0 0 24 30" fill="#cbd5e1">
+        <rect x="6.5" y="0" width="5" height="16" rx="2.5"/>
+        <rect x="4" y="11" width="16" height="15" rx="6"/>
+        <rect x="11" y="9" width="4.5" height="9" rx="2.25"/>
+        <rect x="15" y="10.5" width="4.5" height="8" rx="2.25"/>
+        <rect x="0.5" y="14" width="5" height="9" rx="2.5" transform="rotate(-25 3 18.5)"/>
+      </svg>
+      <div class="tap-ring"></div>
+      <div class="tap-flake"></div>
+      <div class="tap-flake"></div>
+      <div class="tap-flake"></div>
+    </div>
   </div>
 <script>
   // Everyone in the tank. Each fish's frames are small pre-cut sprites in fish/
@@ -137,6 +217,8 @@
     { name: "edwin", frames: [1, 2], chomp: [1, 0], width: 0.2316, aspect: 1.4974, mouthX: 0.3416, mouthY: 0.8342, headTopX: 0.7653 },
     { name: "emily", frames: [1, 2], chomp: [1, 0], width: 0.3238, aspect: 1.3888, mouthX: 0.5095, mouthY: 0.5849, headTopX: 0.4637 },
     { name: "lu", frames: [1, 2], chomp: [1, 0], width: 0.3632, aspect: 1.1215, mouthX: 0.4993, mouthY: 0.6457, headTopX: 0.4553 },
+    { name: "peter", frames: [1, 2, 3, 4], chomp: [1, 2, 3, 2], width: 0.2757, aspect: 1.2766, mouthX: 0.4486, mouthY: 0.7472, headTopX: 0.5287 },
+    { name: "lily", frames: [1, 2, 3], chomp: [1, 2], width: 0.254, aspect: 1.4361, mouthX: 0.5156, mouthY: 0.721, headTopX: 0.5448 },
   ];
 
   // Proportions from background.png (2164 x 4804): the water starts at row 1548.
@@ -176,7 +258,7 @@
     diego: "#c2410c", charles: "#2f7d32", grace: "#be185d",
     iris: "#6d28d9", keith: "#1d4ed8", liam: "#a16207",
     stella: "#0f766e", edwin: "#4d7c0f", emily: "#a21caf",
-    lu: "#b91c1c",
+    lu: "#b91c1c", peter: "#0369a1", lily: "#9d174d",
   };
   const FED_COLOR = "#64748b";
   const LOG_SHOW_MS = 3500;   // how long a line stays before fading
@@ -428,15 +510,19 @@
         const ox = Math.min(p.x + p.w, q.x + q.w) - Math.max(p.x, q.x);
         const oy = Math.min(p.y + p.h, q.y + q.h) - Math.max(p.y, q.y);
         if (ox <= 0 || oy <= 0) continue;
-        // Push along the shallower overlap, half each.
+        // Push along the shallower overlap. Fish going after food push past ones that
+        // aren't, and one closing in on its bite holds its ground; equals split it.
+        const rank = (f) => (f.chasing ? 1 : 0) + (f.closingIn ? 1 : 0);
+        const sa = rank(a) === rank(c) ? 0.5 : rank(a) > rank(c) ? 0 : 1;
+        const sc = 1 - sa;
         if (ox < oy) {
           const dir = p.x + p.w / 2 < q.x + q.w / 2 ? -1 : 1;
-          a.x += dir * ox * SHOVE / 2;
-          c.x -= dir * ox * SHOVE / 2;
+          a.x += dir * ox * SHOVE * sa;
+          c.x -= dir * ox * SHOVE * sc;
         } else {
           const dir = p.y + p.h / 2 < q.y + q.h / 2 ? -1 : 1;
-          a.y += dir * oy * SHOVE / 2;
-          c.y -= dir * oy * SHOVE / 2;
+          a.y += dir * oy * SHOVE * sa;
+          c.y -= dir * oy * SHOVE * sc;
         }
         for (const { f, b } of [A, B]) {
           f.x = Math.min(b.minX + b.rangeX, Math.max(b.minX, f.x));
@@ -500,6 +586,8 @@
       const gx = Math.min(b.minX + b.rangeX, Math.max(b.minX, prey.cx - look.mouthX * b.fw));
       const gy = Math.min(b.minY + b.rangeY, Math.max(b.minY, prey.cy - look.mouthY * b.fh));
       const dx = gx - cx, dy = gy - cy, dist = Math.hypot(dx, dy);
+      // Within about a head's width of the food, hold ground in the crowd (see separate).
+      fish.closingIn = dist < b.fw;
       // Head over at a steady pace, easing in at the end so they don't overshoot.
       const speed = Math.min(sizeUnit() * CHASE_SPEED * fish.appetite.speed, dist * 5);
       const want = dist > 0.01 ? { x: (dx / dist) * speed, y: (dy / dist) * speed } : { x: 0, y: 0 };
@@ -515,6 +603,7 @@
       fish.pauseUntil = 0;
       fish.dart = null;
     } else {
+      fish.closingIn = false;
       if (fish.chasing) {
         fish.chasing = false;
         fish.target = { x: Math.random(), y: Math.random() };
@@ -776,8 +865,14 @@
     }
   }
 
+  const tapDemo = document.getElementById("tap-demo");
   stage.addEventListener("pointerdown", (event) => {
     if (!reduceMotion) sprinkle(event.clientX, event.clientY);
+    // They've got it: fade the tap demo out for good.
+    if (tapDemo) {
+      tapDemo.classList.add("is-done");
+      setTimeout(() => tapDemo.remove(), 700);
+    }
   });
 
   // ---------------------------------------------------------------------------
